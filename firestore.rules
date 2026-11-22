@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(teamId) {
+      return signedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teamId == teamId;
+    }
+
+    // Profil: hanya pemilik yang boleh membaca/menulis.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Kode undangan: hanya bisa diambil per dokumen (tidak bisa di-list).
+    match /teamCodes/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn();
+    }
+
+    match /teams/{teamId} {
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow read, update: if isMember(teamId);
+
+      match /{sub}/{docId} {
+        allow read, write: if isMember(teamId);
+      }
+    }
+  }
+}
